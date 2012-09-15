@@ -1,0 +1,85 @@
+#!/bin/bash
+# backup: a script to backup data.
+
+function usage() {
+  echo "usage: $0 [create|extract] <extract_dir>"
+  exit 1
+}
+
+[[ $# -eq 0 ]] && usage
+
+ACTION=$1
+EXTRACT_DIR=$2
+
+[[ "$ACTION" == "extract" ]] && [[ -z $2 ]] && usage
+
+EMAIL=martin.breining@gmail.com
+NOW=`date +%Y%m%d%H%M`
+YESTERDAY=`date -v -1d +%Y%m%d`
+BACKUP_HOME=$HOME/data/backups
+LOGFILE=$BACKUP_HOME/backups.log
+CURRENT_LINK=$BACKUP_HOME/current
+SNAPSHOTS_DIR=$BACKUP_HOME/snapshots
+ARCHIVES_DIR=$BACKUP_HOME/archives
+BACKUP_SRC_DIR=$HOME/data
+BACKUP_DEST_DIR=$HOME/Dropbox/Backups/laptop
+
+create_backup() {
+  printf "\n%12d-INFO: Backing up %s\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
+  mkdir -p $SNAPSHOTS_DIR $ARCHIVES_DIR &> /dev/null
+
+  # Create new snapshot and update current link.
+  # rsync BACKUP_SRC_DIR SNAPSHOTS_DIR: Copy files from BACKUP_SRC_DIR to SNAPSHOTS_DIR.
+  # --link-dest: Compare received files to CURRENT_LINK and, if identical, create hard links instead of copy.
+  # -H: Preserve hard links.
+  printf "%12d-INFO: Snapshoting %s\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
+  rsync -azHL --exclude `basename $BACKUP_HOME` --link-dest=$CURRENT_LINK $BACKUP_SRC_DIR $SNAPSHOTS_DIR/$NOW \
+  && ln -snf `ls -1d $SNAPSHOTS_DIR/* | tail -n1` $CURRENT_LINK \
+  && printf "%12d-INFO: %s successfully snapshotted\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
+
+  # Archive snapshots older than yesterday.
+  cd $SNAPSHOTS_DIR
+  find $SNAPSHOTS_DIR -type d -mindepth 1 -maxdepth 1 -exec basename {} \; | \
+    while read snapshot; do
+      day=${snapshot:0:8} # YYYYMMDD
+      # Archive and delete snapshots older than yesterday.
+      if [[ $day -le $YESTERDAY ]] && [[ `ls -d $SNAPSHOTS_DIR/$day* 2> /dev/null` ]]; then
+          printf "%12d-INFO: Archiving %s\n" $NOW $ARCHIVES_DIR/$day.tar.gz >> $LOGFILE
+          tar -zcvf $ARCHIVES_DIR/$day.tar.gz `cd $SNAPSHOTS_DIR && ls -d1 $day*` \
+          && rm -rf $SNAPSHOTS_DIR/$day* \
+          && printf "%12d-INFO: %s successfully archived\n" $NOW $ARCHIVES_DIR/$day.tar.gz >> $LOGFILE
+      fi
+    done
+
+  # If there are non-encrypted archives, encrypt them and delete the archive.
+  if [[ `ls -d $ARCHIVES_DIR/*.tar.gz 2> /dev/null` ]]; then
+    printf "%12d-INFO: Encrypting archives\n" $NOW >> $LOGFILE
+    find $ARCHIVES_DIR -type f -mindepth 1 -maxdepth 1 -name \*.tar.gz -exec basename {} \; | \
+      while read archive; do
+        gpg --recipient $EMAIL --yes --encrypt $ARCHIVES_DIR/$archive \
+        && rm -rf $ARCHIVES_DIR/$archive \
+        && printf "%12d-INFO: Archive %s successfully encrypted\n" $NOW $archive >> $LOGFILE
+      done
+  fi
+
+  # Copy encrypted archives to final destination.
+  if [[ `ls -d $ARCHIVES_DIR/*.gpg 2> /dev/null` ]]; then
+    printf "%12d-INFO: Copying backups to %s\n" $NOW $BACKUP_DEST_DIR >> $LOGFILE
+    rsync -az $ARCHIVES_DIR/* $BACKUP_DEST_DIR \
+    && printf "%12d-INFO: Successfully copied backups to %s\n" $NOW $BACKUP_DEST_DIR >> $LOGFILE
+  fi
+
+  end_time=`date +%s`
+  printf "%12d-INFO: Backup successfully created (%6d s)\n" $NOW $(($end_time - $start_time)) >> $LOGFILE
+}
+
+extract_backup() {
+  printf "\n%12d-INFO: Extracting most recent backup\n" $NOW >> $LOGFILE
+  cd $EXTRACT_DIR \
+  && gpg --decrypt `ls -1 $BACKUP_DEST_DIR | tail -n 1` | tar -zxvf - \
+  && printf "\n%12d-INFO: Backup successfully extracted to %s\n" $NOW $EXTRACT_DIR >> $LOGFILE
+}
+
+start_time=`date +%s`
+[[ "$ACTION" = "create" ]] && create_backup
+[[ "$ACTION" = "extract" ]] && extract_backup
