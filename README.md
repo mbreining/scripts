@@ -1,4 +1,4 @@
 bin
 ===
 
-My executables
+My scripts
