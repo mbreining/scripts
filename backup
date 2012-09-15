@@ -32,7 +32,7 @@ create_backup() {
   # rsync BACKUP_SRC_DIR SNAPSHOTS_DIR: Copy files from BACKUP_SRC_DIR to SNAPSHOTS_DIR.
   # --link-dest: Compare received files to CURRENT_LINK and, if identical, create hard links instead of copy.
   # -H: Preserve hard links.
-  printf "%12d-INFO: Snapshoting %s\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
+  printf "%12d-INFO: Snapshotting %s\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
   rsync -azHL --exclude `basename $BACKUP_HOME` --link-dest=$CURRENT_LINK $BACKUP_SRC_DIR $SNAPSHOTS_DIR/$NOW \
   && ln -snf `ls -1d $SNAPSHOTS_DIR/* | tail -n1` $CURRENT_LINK \
   && printf "%12d-INFO: %s successfully snapshotted\n" $NOW $BACKUP_SRC_DIR >> $LOGFILE
