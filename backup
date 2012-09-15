@@ -2,7 +2,7 @@
 # backup: a script to backup data.
 
 function usage() {
-  echo "usage: $0 [create|extract] <extract_dir>"
+  echo "usage: $0 <create|extract> [extract_dir]"
   exit 1
 }
 
