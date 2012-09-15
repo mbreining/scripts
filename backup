@@ -11,7 +11,8 @@ function usage() {
 ACTION=$1
 EXTRACT_DIR=$2
 
-[[ "$ACTION" == "extract" ]] && [[ -z $2 ]] && usage
+[[ "$ACTION" != "create" ]] && [[ "$ACTION" != "extract" ]] && usage
+[[ "$ACTION" = "extract" ]] && [[ -z $2 ]] && usage
 
 EMAIL=martin.breining@gmail.com
 NOW=`date +%Y%m%d%H%M`
